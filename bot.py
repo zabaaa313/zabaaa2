@@ -170,11 +170,14 @@ async def keep_alive_ping():
     url = os.environ.get("RENDER_EXTERNAL_URL")
     if url:
         try:
-            async with aiohttp.ClientSession(headers=CUSTOM_HEADERS) as session:
+            async with aiohttp.ClientSession() as session:
                 async with session.get(url) as response:
-                    print(f"⏰ [KEEP-ALIVE] Ping wysłany do {url} | Status: {response.status}")
+                    if response.status == 200:
+                        print(f"⏰ [KEEP-ALIVE] Ping udany do {url}")
+                    else:
+                        print(f"⚠️ [KEEP-ALIVE] Otrzymano status HTTP {response.status}")
         except Exception as e:
-            print(f"⚠️ [KEEP-ALIVE] Błąd: {e}")
+            print(f"⚠️ [KEEP-ALIVE] Błąd połączenia: {e}")
 
 def get_ticket_target(channel: discord.TextChannel, moderator: discord.Member):
     for obj, overwrite in channel.overwrites.items():
@@ -433,12 +436,10 @@ async def cmd_setup(interaction: discord.Interaction):
         role = discord.utils.get(guild.roles, name=n) or await guild.create_role(name=n, color=discord.Color(c), hoist=True)
         r[n] = role
 
-    # Konfiguracja uprawnień (skrócona dla czytelności)
     p_member = {ev: discord.PermissionOverwrite(view_channel=False), r["「 」Członek"]: discord.PermissionOverwrite(view_channel=True), r["🤝 Sojusz"]: discord.PermissionOverwrite(view_channel=True), r["「 」SZEF"]: discord.PermissionOverwrite(view_channel=True)}
     p_rekru = {ev: discord.PermissionOverwrite(view_channel=False), r["Ticket"]: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True), r["Rekruter"]: discord.PermissionOverwrite(view_channel=True), r["Zarząd"]: discord.PermissionOverwrite(view_channel=True), r["「 」SZEF"]: discord.PermissionOverwrite(view_channel=True), r["║ do rekru"]: discord.PermissionOverwrite(view_channel=True)}
     p_logs = {ev: discord.PermissionOverwrite(view_channel=False), r["Zarząd"]: discord.PermissionOverwrite(view_channel=True), r["「 」SZEF"]: discord.PermissionOverwrite(view_channel=True)}
 
-    # Tworzenie kanałów...
     c_w = await guild.create_category("・ 『Witaj/Żegnamy』 ・")
     await guild.create_text_channel("💻-witamy", category=c_w)
     await guild.create_text_channel("💬-żegnamy", category=c_w)
