@@ -5,6 +5,7 @@ import json
 import os
 import threading
 import aiohttp
+from aiohttp_socks import ProxyConnector
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
@@ -18,8 +19,11 @@ if proxy_url:
     print(f"🌐 [PROXY] Konfiguracja proxy: {proxy_url}")
     os.environ["HTTP_PROXY"] = proxy_url
     os.environ["HTTPS_PROXY"] = proxy_url
-    # Tworzymy connector dla aiohttp używany przez bota
-    connector = aiohttp.ProxyConnector.from_url(proxy_url)
+    # Używamy aiohttp_socks do obsługi proxy HTTP / SOCKS
+    try:
+        connector = ProxyConnector.from_url(proxy_url)
+    except Exception as e:
+        print(f"⚠️ Błąd inicjalizacji proxy: {e}")
 
 CUSTOM_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -180,7 +184,6 @@ async def keep_alive_ping():
     url = os.environ.get("RENDER_EXTERNAL_URL")
     if url:
         try:
-            # Używamy connector też dla keep-alive, żeby zapytania szły przez proxy
             async with aiohttp.ClientSession(headers=CUSTOM_HEADERS, connector=connector) as session:
                 async with session.get(url) as response:
                     if response.status == 200:
