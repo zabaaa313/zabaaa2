@@ -8,7 +8,7 @@ import threading
 import aiohttp
 from flask import Flask
 import json
-from google import genai
+import google.generativeai as genai
 
 # --- KONFIGURACJA SERWERA WWW (FLASK) ---
 app = Flask(__name__)
@@ -568,130 +568,23 @@ async def cmd_urlop(interaction: discord.Interaction):
         return
     await interaction.response.send_modal(UrlopModal())
 
-@bot.tree.command(name="klepa", description="Tworzy zapisy na klepę")
+@bot.tree.command(name="klepa", description="Wysyła zapisy na bitwę/klepę")
 @app_commands.checks.has_permissions(administrator=True)
-async def cmd_klepa(interaction: discord.Interaction, cel: str, godzina: str):
+async def cmd_klepa(interaction: discord.Interaction, opis: str):
     embed = discord.Embed(
-        title="⚔️ ZAPISY NA KLEPĘ",
-        description=f"**Cel:** {cel}\n**Godzina:** {godzina}\n\nOznacz swój status poniżej!",
+        title="⚔️ WEZWANIE NA KLEPĘ!",
+        description=f"**Opis:** {opis}\n\nPotwierdź swoją obecność poniżej!",
         color=discord.Color.red(),
         timestamp=datetime.now()
     )
     embed.add_field(name="🟢 Wchodzą:", value="Brak", inline=False)
     embed.add_field(name="🟡 Będą później:", value="Brak", inline=False)
     embed.add_field(name="🔴 Nie mogą:", value="Brak", inline=False)
+    
     await interaction.channel.send(embed=embed, view=KlepaView())
-    await interaction.response.send_message("✅ Utworzono zapisy na klepę!", ephemeral=True)
+    await interaction.response.send_message("✅ Ogłoszenie klepy wysłane!", ephemeral=True)
 
-@bot.tree.command(name="akceptuj", description="Akceptuje gracza w ticketcie i go zamyka")
-async def cmd_akceptuj(interaction: discord.Interaction):
-    if not has_management_permission(interaction.user):
-        await interaction.response.send_message("❌ Brak uprawnień!", ephemeral=True)
-        return
-    
-    target = get_ticket_target(interaction.channel, interaction.user)
-    await interaction.response.send_message("⏳ Akceptowanie gracza i archiwizowanie ticketa...")
-    
-    if target:
-        role_czlonek = discord.utils.get(interaction.guild.roles, name="「 」Członek")
-        role_rekru = discord.utils.get(interaction.guild.roles, name="║ do rekru")
-        if role_czlonek:
-            await target.add_roles(role_czlonek)
-        if role_rekru:
-            await target.remove_roles(role_rekru)
-        
-        await send_transcript_dm(target, interaction.channel)
-
-    transcript = await get_transcript_text(interaction.channel)
-    archive = load_archive()
-    archive.append({
-        "user_name": target.display_name if target else interaction.channel.name,
-        "user_id": target.id if target else None,
-        "closed_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "closed_by": interaction.user.display_name,
-        "status": "AKCEPTOWANY",
-        "transcript": transcript
-    })
-    save_archive(archive)
-
-    await send_log(interaction.guild, f"✅ **AKCEPTACJA:** {interaction.user.mention} zaakceptował {target.mention if target else interaction.channel.name}.")
-    await asyncio.sleep(3)
-    await interaction.channel.delete()
-
-@bot.tree.command(name="odrzuc", description="Odrzuca podanie w ticketcie i go zamyka")
-async def cmd_odrzuc(interaction: discord.Interaction, powod: str = "Brak podanego powodu"):
-    if not has_management_permission(interaction.user):
-        await interaction.response.send_message("❌ Brak uprawnień!", ephemeral=True)
-        return
-
-    target = get_ticket_target(interaction.channel, interaction.user)
-    await interaction.response.send_message("⏳ Odrzucanie podania i zamykanie ticketa...")
-
-    if target:
-        await send_transcript_dm(target, interaction.channel)
-        try:
-            await target.send(f"❌ Twoje podanie zostało odrzucone. Powód: **{powod}**")
-        except Exception:
-            pass
-
-    transcript = await get_transcript_text(interaction.channel)
-    archive = load_archive()
-    archive.append({
-        "user_name": target.display_name if target else interaction.channel.name,
-        "user_id": target.id if target else None,
-        "closed_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "closed_by": interaction.user.display_name,
-        "status": "ODRZUCONY",
-        "transcript": transcript
-    })
-    save_archive(archive)
-
-    await send_log(interaction.guild, f"❌ **ODRZUCENIE:** {interaction.user.mention} odrzucił podanie {target.mention if target else interaction.channel.name}. Powód: {powod}")
-    await asyncio.sleep(3)
-    await interaction.channel.delete()
-
-@bot.tree.command(name="zamknij", description="Zamyka ticket i tworzy archiwum")
-async def cmd_zamknij(interaction: discord.Interaction):
-    if not has_management_permission(interaction.user):
-        await interaction.response.send_message("❌ Brak uprawnień!", ephemeral=True)
-        return
-
-    target = get_ticket_target(interaction.channel, interaction.user)
-    await interaction.response.send_message("⏳ Zamykanie i archiwizowanie ticketa...")
-
-    if target:
-        await send_transcript_dm(target, interaction.channel)
-
-    transcript = await get_transcript_text(interaction.channel)
-    archive = load_archive()
-    archive.append({
-        "user_name": target.display_name if target else interaction.channel.name,
-        "user_id": target.id if target else None,
-        "closed_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "closed_by": interaction.user.display_name,
-        "status": "ZAMKNIĘTY",
-        "transcript": transcript
-    })
-    save_archive(archive)
-
-    await send_log(interaction.guild, f"🔒 **ZAMKNIĘCIE:** Ticket {interaction.channel.name} został zamknięty przez {interaction.user.mention}.")
-    await asyncio.sleep(3)
-    await interaction.channel.delete()
-
-@bot.tree.command(name="stary-ticket", description="Przeglądaj archiwalne tickety")
-async def cmd_stary_ticket(interaction: discord.Interaction):
-    if not has_management_permission(interaction.user):
-        await interaction.response.send_message("❌ Brak uprawnień!", ephemeral=True)
-        return
-
-    archive = load_archive()
-    if not archive:
-        await interaction.response.send_message("📂 Brak zarchiwizowanych ticketów w bazie.", ephemeral=True)
-        return
-
-    await interaction.response.send_message("📂 Wybierz archiwalny ticket z listy:", view=OldTicketsView(archive), ephemeral=True)
-
-# --- KOMENDA /AI (Z TWORZENIEM KANAŁÓW I NOWĄ BIBLIOTEKĄ GOOGLE GENAI) ---
+# --- ZAAWANSOWANA KOMENDA /AI Z WYKONYWANIEM AKCJI (TWORZENIE KANAŁÓW) ---
 @bot.tree.command(name="ai", description="Wydaj polecenie asystentowi AI (może też tworzyć kanały!)")
 async def ai_command(interaction: discord.Interaction, prompt: str):
     if not has_management_permission(interaction.user):
@@ -706,7 +599,22 @@ async def ai_command(interaction: discord.Interaction, prompt: str):
         return
 
     try:
-        client = genai.Client(api_key=gemini_key)
+        genai.configure(api_key=gemini_key)
+        
+        models_to_test = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']
+        
+        try:
+            for m in genai.list_models():
+                if 'generateContent' in m.supported_generation_methods:
+                    name = m.name.replace("models/", "")
+                    if "2.5" not in name and name not in models_to_test:
+                        models_to_test.insert(0, name)
+        except Exception:
+            pass
+
+        response = None
+        success = False
+        used_model = ""
 
         system_instruction = (
             "Jesteś zaawansowanym asystentem administracyjnym serwera Discord. "
@@ -716,12 +624,19 @@ async def ai_command(interaction: discord.Interaction, prompt: str):
             "Jeśli użytkownik o nic takiego nie prosi, nie dopisuj tego znacznika."
         )
 
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=f"{system_instruction}\n\nUżytkownik napisał: {prompt}"
-        )
+        for model_name in models_to_test:
+            try:
+                clean_name = model_name.replace("models/", "")
+                model = genai.GenerativeModel(clean_name)
+                response = model.generate_content(f"{system_instruction}\n\nUżytkownik napisał: {prompt}")
+                if response and response.text:
+                    used_model = clean_name
+                    success = True
+                    break
+            except Exception:
+                continue
 
-        if response and response.text:
+        if success and response and response.text:
             full_text = response.text
             akcja_info = ""
 
@@ -743,22 +658,118 @@ async def ai_command(interaction: discord.Interaction, prompt: str):
                 except Exception as e:
                     akcja_info = f"\n\n⚠️ *(Próbowałem utworzyć kanał głosowy, ale wystąpił błąd: {e})*"
 
-            await interaction.followup.send(f"🤖 **Odpowiedź AI:**\n\n{full_text.strip()}{akcja_info}")
+            await interaction.followup.send(f"🤖 **Asystent AI (`{used_model}`):**\n\n{full_text.strip()}{akcja_info}")
         else:
-            await interaction.followup.send("⚠️ AI nie wygenerowało żądanej odpowiedzi.")
-
+            await interaction.followup.send("❌ Nie udało się uzyskać odpowiedzi od AI. Sprawdź swój klucz API.")
     except Exception as e:
-        await interaction.followup.send(f"❌ Wystąpił błąd w komunikacji z AI: {e}")
+        await interaction.followup.send(f"❌ Wystąpił błąd podczas komunikacji z AI: {e}")
 
-# --- URUCHOMIENIE APLIKACJI I FLASKA ---
+# --- OBSŁUGA TICKETÓW (ZAMKNIJ, AKCEPTUJ, ODRZUĆ, ARCHIWUM) ---
+
+@bot.tree.command(name="zamknij", description="Zamyka i archiwizuje ticket")
+async def cmd_zamknij(interaction: discord.Interaction):
+    if not has_management_permission(interaction.user):
+        await interaction.response.send_message("❌ Brak uprawnień!", ephemeral=True)
+        return
+
+    channel = interaction.channel
+    if not channel.name.startswith("🎫-"):
+        await interaction.response.send_message("❌ Tej komendy możesz użyć tylko na kanale ticketa!", ephemeral=True)
+        return
+
+    await interaction.response.send_message("🔒 Zamykanie ticketa i tworzenie transkryptu...")
+    target = get_ticket_target(channel, interaction.user)
+    transcript = await get_transcript_text(channel)
+
+    if target:
+        await send_transcript_dm(target, channel)
+
+    archive = load_archive()
+    archive.append({
+        "user_name": target.display_name if target else channel.name,
+        "closed_by": interaction.user.display_name,
+        "closed_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "transcript": transcript
+    })
+    save_archive(archive)
+
+    await send_log(interaction.guild, f"🗑️ **ZAMKNIĘTO TICKET:** {channel.name} przez {interaction.user.mention}.")
+    await asyncio.sleep(3)
+    await channel.delete()
+
+@bot.tree.command(name="akceptuj", description="Akceptuje kandydata i przyznaje rangę Członek")
+async def cmd_akceptuj(interaction: discord.Interaction):
+    if not has_management_permission(interaction.user):
+        await interaction.response.send_message("❌ Brak uprawnień!", ephemeral=True)
+        return
+
+    channel = interaction.channel
+    target = get_ticket_target(channel, interaction.user)
+
+    if not target:
+        await interaction.response.send_message("❌ Nie znaleziono kandydata w tym tickecie!", ephemeral=True)
+        return
+
+    role_czlonek = discord.utils.get(interaction.guild.roles, name="「 」Członek")
+    role_dorekru = discord.utils.get(interaction.guild.roles, name="║ do rekru")
+
+    if role_czlonek: await target.add_roles(role_czlonek)
+    if role_dorekru: await target.remove_roles(role_dorekru)
+
+    embed = discord.Embed(
+        title="🎉 GRATULACJE!",
+        description=f"Kandydat {target.mention} został **AKCEPTOWANY** do gildii przez {interaction.user.mention}!",
+        color=discord.Color.green()
+    )
+    await channel.send(embed=embed)
+    await send_log(interaction.guild, f"✅ **REKRUTACJA AKCEPTOWANA:** Użytkownik {target.mention} dołączył do gildii.")
+    await interaction.response.send_message("✅ Akceptowano podanie!", ephemeral=True)
+
+@bot.tree.command(name="odrzuc", description="Odrzuca podanie kandydata")
+async def cmd_odrzuc(interaction: discord.Interaction, powod: str = "Brak podanego powodu"):
+    if not has_management_permission(interaction.user):
+        await interaction.response.send_message("❌ Brak uprawnień!", ephemeral=True)
+        return
+
+    channel = interaction.channel
+    target = get_ticket_target(channel, interaction.user)
+
+    if not target:
+        await interaction.response.send_message("❌ Nie znaleziono kandydata w tym tickecie!", ephemeral=True)
+        return
+
+    role_dorekru = discord.utils.get(interaction.guild.roles, name="║ do rekru")
+    if role_dorekru: await target.remove_roles(role_dorekru)
+
+    embed = discord.Embed(
+        title="❌ PODANIE ODRZUCONE",
+        description=f"Podanie kandydata {target.mention} zostało odrzucone.\n**Powód:** {powod}",
+        color=discord.Color.red()
+    )
+    await channel.send(embed=embed)
+    await send_log(interaction.guild, f"❌ **REKRUTACJA ODRZUCONA:** {target.mention} | Powód: {powod}")
+    await interaction.response.send_message("✅ Odrzucono podanie!", ephemeral=True)
+
+@bot.tree.command(name="staryticket", description="Przeglądaj archiwalne transkrypty ticketów")
+async def cmd_staryticket(interaction: discord.Interaction):
+    if not has_management_permission(interaction.user):
+        await interaction.response.send_message("❌ Brak uprawnień!", ephemeral=True)
+        return
+
+    archive = load_archive()
+    if not archive:
+        await interaction.response.send_message("📜 Archiwum ticketów jest obecnie puste.", ephemeral=True)
+        return
+
+    await interaction.response.send_message("📜 Wybierz ticket z listy poniżej, aby otrzymać transkrypt:", view=OldTicketsView(archive), ephemeral=True)
+
+# --- URUCHOMIENIE BOTA I SERWERA FLASK ---
 if __name__ == "__main__":
-    # Uruchomienie serwera Flask w osobnym wątku
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
 
-    # Pobranie tokena bota ze zmiennych środowiskowych i start
-    discord_token = os.environ.get("DISCORD_TOKEN")
-    if discord_token:
-        bot.run(discord_token)
+    token = os.environ.get("DISCORD_TOKEN")
+    if token:
+        bot.run(token)
     else:
         print("❌ Błąd: Brak zmiennej środowiskowej DISCORD_TOKEN!")
