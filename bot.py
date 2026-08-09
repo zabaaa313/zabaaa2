@@ -12,10 +12,14 @@ from flask import Flask
 
 # --- KONFIGURACJA PROXY I USER-AGENT ---
 proxy_url = os.environ.get("HTTP_PROXY")
+connector = None
+
 if proxy_url:
     print(f"🌐 [PROXY] Konfiguracja proxy: {proxy_url}")
     os.environ["HTTP_PROXY"] = proxy_url
     os.environ["HTTPS_PROXY"] = proxy_url
+    # Tworzymy connector dla aiohttp używany przez bota
+    connector = aiohttp.ProxyConnector.from_url(proxy_url)
 
 CUSTOM_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -39,6 +43,12 @@ intents = discord.Intents.all()
 class MyBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix="!", intents=intents)
+
+    async def start(self, token: str, *, reconnect: bool = True):
+        # Wymuszenie proxy dla discord.py
+        if connector:
+            self.http.connector = connector
+        await super().start(token, reconnect=reconnect)
 
     async def setup_hook(self):
         self.add_view(VerifyView())
@@ -170,7 +180,8 @@ async def keep_alive_ping():
     url = os.environ.get("RENDER_EXTERNAL_URL")
     if url:
         try:
-            async with aiohttp.ClientSession(headers=CUSTOM_HEADERS) as session:
+            # Używamy connector też dla keep-alive, żeby zapytania szły przez proxy
+            async with aiohttp.ClientSession(headers=CUSTOM_HEADERS, connector=connector) as session:
                 async with session.get(url) as response:
                     if response.status == 200:
                         print(f"⏰ [KEEP-ALIVE] Ping udany do {url}")
