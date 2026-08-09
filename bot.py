@@ -933,22 +933,105 @@ async def cmd_klepa(interaction: discord.Interaction, opis: str):
     embed.add_field(name="🟢 Wchodzą:", value="Brak", inline=False)
     embed.add_field(name="🟡 Będą później:", value="Brak", inline=False)
     embed.add_field(name="🔴 Nie mogą:", value="Brak", inline=False)
+    
     await interaction.channel.send(embed=embed, view=KlepaView())
-    await interaction.response.send_message(
-        "✅ Wysłano panel zapisów na klepę!", ephemeral=True
+    await interaction.response.send_message("✅ Wysłano panel zapisów na klepę!", ephemeral=True)
+
+
+# --- KOMENDY DLA REKRUTERA ---
+
+@bot.tree.command(name="stareticekty", description="Przeglądaj archiwalne tickety rekrutacyjne")
+async def cmd_stareticekty(interaction: discord.Interaction):
+    if not has_management_permission(interaction.user):
+        await interaction.response.send_message("❌ Nie masz uprawnień do tej komendy!", ephemeral=True)
+        return
+        
+    tickets = load_archive()
+    if not tickets:
+        await interaction.response.send_message("📭 Brak zarchiwizowanych tiketów.", ephemeral=True)
+        return
+        
+    await interaction.response.send_message("📜 Wybierz archiwalny ticket z listy poniżej:", view=OldTicketsView(tickets), ephemeral=True)
+
+
+@bot.tree.command(name="acc", description="Akceptuje podanie i przenosi wyżej")
+async def cmd_acc(interaction: discord.Interaction, member: discord.Member, powód: str = "Brak"):
+    if not has_management_permission(interaction.user):
+        await interaction.response.send_message("❌ Nie masz uprawnień do tej komendy!", ephemeral=True)
+        return
+        
+    embed = discord.Embed(
+        title="✅ PODANIE ZAAKCEPTOWANE",
+        description=f"Gratulacje {member.mention}! Twoje podanie zostało **zaakceptowane**.\n**Przez:** {interaction.user.mention}\n**Powód:** {powód}",
+        color=discord.Color.green(),
+        timestamp=datetime.now()
     )
+    await interaction.channel.send(embed=embed)
+    await interaction.response.send_message("✅ Pomyślnie zaakceptowano rekrutację.", ephemeral=True)
+    await send_log(interaction.guild, f"✅ **AKCEPTACJA:** Użytkownik {member.mention} został zaakceptowany przez {interaction.user.mention}.")
 
 
-# --- URUCHOMIENIE BOTA I FLASKA ---
+@bot.tree.command(name="odrz", description="Odrzuca podanie")
+async def cmd_odrz(interaction: discord.Interaction, member: discord.Member, powód: str = "Brak podanego powodu"):
+    if not has_management_permission(interaction.user):
+        await interaction.response.send_message("❌ Nie masz uprawnień do tej komendy!", ephemeral=True)
+        return
+        
+    embed = discord.Embed(
+        title="❌ PODANIE ODRZUCONE",
+        description=f"Przykro nam {member.mention}, Twoje podanie zostało **odrzucone**.\n**Przez:** {interaction.user.mention}\n**Powód:** {powód}",
+        color=discord.Color.red(),
+        timestamp=datetime.now()
+    )
+    await interaction.channel.send(embed=embed)
+    await interaction.response.send_message("✅ Pomyślnie odrzucono rekrutację.", ephemeral=True)
+    await send_log(interaction.guild, f"❌ **ODRZUCENIE:** Użytkownik {member.mention} został odrzucony przez {interaction.user.mention}.")
+
+
+@bot.tree.command(name="zamknij", description="Zamyka i archiwizuje bieżący ticket")
+async def cmd_zamknij(interaction: discord.Interaction):
+    if not has_management_permission(interaction.user):
+        await interaction.response.send_message("❌ Nie masz uprawnień do tej komendy!", ephemeral=True)
+        return
+        
+    if not interaction.channel.name.startswith("🎫-"):
+        await interaction.response.send_message("❌ Tej komendy można używać tylko w tiketach!", ephemeral=True)
+        return
+
+    await interaction.response.defer(ephemeral=True)
+    channel = interaction.channel
+    
+    target = get_ticket_target(channel, interaction.user)
+    transcript_content = await get_transcript_text(channel)
+    
+    archive = load_archive()
+    archive.append({
+        "user_name": target.name if target else "Nieznany",
+        "closed_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "transcript": transcript_content
+    })
+    save_archive(archive)
+    
+    if target:
+        success = await send_transcript_dm(target, channel)
+        if success:
+            await interaction.followup.send("✅ Archiwum zostało wysłane do użytkownika na PV. Zamykam kanał...", ephemeral=True)
+        else:
+            await interaction.followup.send("⚠️ Nie udało się wysłać archiwum na PV (użytkownik ma zablokowane wiadomości). Zamykam kanał...", ephemeral=True)
+    
+    await send_log(interaction.guild, f"🔒 **ZAMKNIĘTO TICKET:** Kanał `{channel.name}` został zamknięty przez {interaction.user.mention}.")
+    await asyncio.sleep(3)
+    await channel.delete()
+
+
+# --- URUCHOMIENIE APLIKACJI ---
+
 if __name__ == "__main__":
-    # Uruchomienie serwera WWW w osobnym wątku, aby Render widział aktywny port
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-
-    # Uruchomienie bota Discord (pobiera token ze zmiennych środowiskowych Rendera)
+    t = threading.Thread(target=run_flask)
+    t.start()
+    
     TOKEN = os.environ.get("DISCORD_TOKEN")
     if TOKEN:
         bot.run(TOKEN)
     else:
-        print("❌ BŁĄD: Brak zmiennej środowiskowej DISCORD_TOKEN na Renderze!")
+        print("⚠️ Brak zmiennej środowiskowej DISCORD_TOKEN!")
