@@ -954,21 +954,63 @@ async def cmd_stareticekty(interaction: discord.Interaction):
     await interaction.response.send_message("📜 Wybierz archiwalny ticket z listy poniżej:", view=OldTicketsView(tickets), ephemeral=True)
 
 
-@bot.tree.command(name="acc", description="Akceptuje podanie i przenosi wyżej")
+@bot.tree.command(name="acc", description="Akceptuje podanie/kandydata i obsługuje etapy")
 async def cmd_acc(interaction: discord.Interaction, member: discord.Member, powód: str = "Brak"):
     if not has_management_permission(interaction.user):
         await interaction.response.send_message("❌ Nie masz uprawnień do tej komendy!", ephemeral=True)
         return
         
-    embed = discord.Embed(
-        title="✅ PODANIE ZAAKCEPTOWANE",
-        description=f"Gratulacje {member.mention}! Twoje podanie zostało **zaakceptowane**.\n**Przez:** {interaction.user.mention}\n**Powód:** {powód}",
-        color=discord.Color.green(),
-        timestamp=datetime.now()
-    )
-    await interaction.channel.send(embed=embed)
-    await interaction.response.send_message("✅ Pomyślnie zaakceptowano rekrutację.", ephemeral=True)
-    await send_log(interaction.guild, f"✅ **AKCEPTACJA:** Użytkownik {member.mention} został zaakceptowany przez {interaction.user.mention}.")
+    guild = interaction.guild
+    channel = interaction.channel
+    category = channel.category
+    cat_name = category.name if category else ""
+    
+    # Sprawdzamy czy to etap 2 (po nazwie kategorii lub nazwie kanału)
+    is_etap_2 = "ETAP 2" in cat_name.upper() or "ETAP 2" in channel.name.upper()
+    
+    if is_etap_2:
+        # Obsługa drugiego etapu: nadaje rangę członka i zabiera rangę "║ do rekru"
+        role_czlonek = discord.utils.get(guild.roles, name="「 」Członek")
+        role_do_rekru = discord.utils.get(guild.roles, name="║ do rekru")
+        
+        if role_czlonek:
+            await member.add_roles(role_czlonek)
+        if role_do_rekru:
+            await member.remove_roles(role_do_rekru)
+            
+        embed = discord.Embed(
+            title="🎉 ZALICZONO DRUGI ETAP REKRUTACJI!",
+            description=f"Gratulacje {member.mention}! Pomyślnie ukończyłeś rekrutację i otrzymujesz rangę **「 」Członek**!\n**Przez:** {interaction.user.mention}\n**Powód:** {powód}",
+            color=discord.Color.gold(),
+            timestamp=datetime.now()
+        )
+        await channel.send(embed=embed)
+        await interaction.response.send_message("✅ Pomyślnie ukończono etap 2 rekrutacji dla użytkownika.", ephemeral=True)
+        await send_log(guild, f"🎉 **UKOŃCZENIE REKRUTACJI:** Użytkownik {member.mention} awansował na członka gildii przez {interaction.user.mention}.")
+    else:
+        # Zwykła akceptacja (Etap 1) - przeniesienie wyżej (np. do kategorii Etap 2)
+        cat_etap2 = discord.utils.get(guild.categories, name="『ETAP 2』")
+        if cat_etap2 and channel.permissions_for(guild.me).manage_channels:
+            try:
+                await channel.edit(category=cat_etap2)
+            except Exception:
+                pass
+                
+        embed = discord.Embed(
+            title="✅ PODANIE ZAAKCEPTOWANE (PRZEJŚCIE DO ETAPU 2)",
+            description=(
+                f"Gratulacje {member.mention}! Twoje podanie zostało **zaakceptowane** i przechodzisz do **Etapu 2**.\n"
+                f"**Przez:** {interaction.user.mention}\n"
+                f"**Powód:** {powód}\n\n"
+                f"Jak ktoś będzie czas, to Ci odpisze w sprawie dueli. "
+                f"Tutaj masz kanały na które możesz wbić na rekrutację <#1494791287533076603> lub <#1494791290569621685>"
+            ),
+            color=discord.Color.green(),
+            timestamp=datetime.now()
+        )
+        await channel.send(embed=embed)
+        await interaction.response.send_message("✅ Pomyślnie zaakceptowano podanie i przeniesiono do Etapu 2.", ephemeral=True)
+        await send_log(guild, f"✅ **AKCEPTACJA (ETAP 1):** Użytkownik {member.mention} został przesłany do Etapu 2 przez {interaction.user.mention}.")
 
 
 @bot.tree.command(name="odrz", description="Odrzuca podanie")
