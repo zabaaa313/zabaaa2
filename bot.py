@@ -5,25 +5,15 @@ import json
 import os
 import threading
 import aiohttp
-from aiohttp_socks import ProxyConnector
 import discord
-from discord import app_commands
+from discord import app_codes if False else app_commands
 from discord.ext import commands, tasks
 from flask import Flask
 
 # --- KONFIGURACJA PROXY I USER-AGENT ---
 proxy_url = os.environ.get("HTTP_PROXY")
-connector = None
-
 if proxy_url:
-    print(f"🌐 [PROXY] Konfiguracja proxy: {proxy_url}")
-    os.environ["HTTP_PROXY"] = proxy_url
-    os.environ["HTTPS_PROXY"] = proxy_url
-    # Używamy aiohttp_socks do obsługi proxy HTTP / SOCKS
-    try:
-        connector = ProxyConnector.from_url(proxy_url)
-    except Exception as e:
-        print(f"⚠️ Błąd inicjalizacji proxy: {e}")
+    print(f"🌐 [PROXY] Konfiguracja proxy dla bota: {proxy_url}")
 
 CUSTOM_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -46,13 +36,11 @@ intents = discord.Intents.all()
 
 class MyBot(commands.Bot):
     def __init__(self):
-        super().__init__(command_prefix="!", intents=intents)
-
-    async def start(self, token: str, *, reconnect: bool = True):
-        # Wymuszenie proxy dla discord.py
-        if connector:
-            self.http.connector = connector
-        await super().start(token, reconnect=reconnect)
+        # Przekazujemy proxy bezpośrednio do discord.py (jeśli jest ustawione)
+        kwargs = {"command_prefix": "!", "intents": intents}
+        if proxy_url:
+            kwargs["proxy"] = proxy_url
+        super().__init__(**kwargs)
 
     async def setup_hook(self):
         self.add_view(VerifyView())
@@ -145,20 +133,6 @@ async def get_transcript_text(channel: discord.TextChannel):
         transcript_text = "...(historia zbyt długa)...\n" + transcript_text[-4000:]
     return transcript_text
 
-async def send_transcript_dm(member: discord.Member, channel: discord.TextChannel):
-    transcript_text = await get_transcript_text(channel)
-    embed = discord.Embed(
-        title=f"📜 Historia rozmowy z ticketa: {channel.name}",
-        description=transcript_text,
-        color=discord.Color.blue(),
-        timestamp=datetime.now()
-    )
-    try:
-        await member.send(embed=embed)
-        return True
-    except discord.Forbidden:
-        return False
-
 async def send_log(guild, message):
     log_channel = discord.utils.get(guild.text_channels, name="📑-logi")
     if log_channel:
@@ -184,8 +158,10 @@ async def keep_alive_ping():
     url = os.environ.get("RENDER_EXTERNAL_URL")
     if url:
         try:
-            async with aiohttp.ClientSession(headers=CUSTOM_HEADERS, connector=connector) as session:
-                async with session.get(url) as response:
+            # Dla sesji aiohttp też uwzględniamy proxy jeśli jest podane
+            connector = aiohttp.TCPConnector()
+            async with aiohttp.ClientSession(headers=CUSTOM_HEADERS) as session:
+                async with session.get(url, proxy=proxy_url if proxy_url else None) as response:
                     if response.status == 200:
                         print(f"⏰ [KEEP-ALIVE] Ping udany do {url}")
                     else:
