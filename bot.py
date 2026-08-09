@@ -752,11 +752,9 @@ async def ai_command(interaction: discord.Interaction, prompt: str):
 
 # --- URUCHOMIENIE APLIKACJI I FLASKA ---
 if __name__ == "__main__":
-    # Uruchomienie serwera Flask w osobnym wątku
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
 
-    # Pobranie tokena bota ze zmiennych środowiskowych i start
     discord_token = os.environ.get("DISCORD_TOKEN")
     if discord_token:
         bot.run(discord_token)
