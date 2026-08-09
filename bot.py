@@ -17,12 +17,11 @@ if proxy_url:
     os.environ["HTTP_PROXY"] = proxy_url
     os.environ["HTTPS_PROXY"] = proxy_url
 
-# Własny User-Agent zapobiegający blokadom Cloudflare
 CUSTOM_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 DiscordBot/1.0"
 }
 
-# --- KONFIGURACJA SERWERA WWW (FLASK) ---
+# --- SERWER WWW (FLASK) ---
 app = Flask(__name__)
 bot_status = "Uruchamianie..."
 
@@ -54,7 +53,6 @@ class MyBot(commands.Bot):
 
 bot = MyBot()
 
-# --- SYSTEM ARCHIWIZACJI TICKETÓW I KONFIGURACJI ---
 ARCHIVE_FILE = "ticket_archive.json"
 CONFIG_FILE = "server_config.json"
 
@@ -81,25 +79,9 @@ def load_config():
             "**I. POSTANOWIENIA OGÓLNE**\n"
             "→ 1. Dołączając na serwer, akceptujesz poniższy regulamin.\n"
             "→ 2. Nieznajomość regulaminu nie zwalnia z jego przestrzegania.\n"
-            "→ 3. Głównym celem gildii jest wspólna gra, zabawa i dominacja na serwerze.\n\n"
-            "**II. ZASADY KULTURY I KOMUNIKACJI**\n"
-            "→ 1. Zakaz nadmiernego toksycznego zachowania wobec członków gildii.\n"
-            "→ 2. Zakaz drszczenia mordy (earrape) podczas klep i ważnych akcji.\n"
-            "→ 3. Słuchamy liderówki bez zbędnej dyskusji podczas walki.\n"
-            "→ 4. Szanujemy się nawzajem – dystans do siebie to podstawa.\n\n"
-            "**III. ZASADY ROZGRYWKI**\n"
-            "→ 1. Zakaz wynoszenia itemów z baz gildyjnych do sojuszników lub osób trzecich.\n"
-            "→ 2. Każdy członek ma obowiązek stawienia się na wezwanie do pomocy (np. obrona bazy).\n"
-            "→ 3. Aktywność jest monitorowana – długa nieobecność bez info = wyrzucenie.\n"
-            "→ 4. Zakaz używania wspomagaczy (cheatów), które mogą narazić gildię na bany.\n\n"
-            "**IV. REKRUTACJA I TICKETY**\n"
-            "→ 1. Kłamanie w podaniu skutkuje natychmiastowym odrzuceniem.\n"
-            "→ 2. Decyzja rekrutera jest ostateczna.\n"
-            "→ 3. Przejście etapu 1 (podanie) nie gwarantuje stałego miejsca w gildii.\n\n"
-            "**V. KARY**\n"
-            "→ 1. Upomnienie słowne.\n"
-            "→ 2. Degradacja lub odebranie uprawnień.\n"
-            "→ 3. Ban i wyrzucenie z gildii bez możliwości powrotu."
+            "→ 3. Wspólna gra, szacunek i aktywność to klucz do sukcesu.\n\n"
+            "**II. ZASADY KULTURY**\n"
+            "→ 1. Szanujemy się nawzajem."
         ),
         "pytania": [
             "1. Nick z Minecrafta",
@@ -128,7 +110,6 @@ def save_config(config_data):
     except Exception as e:
         print(f"⚠️ [CONFIG] Błąd zapisu: {e}")
 
-# --- FUNKCJE POMOCNICZE ---
 async def get_transcript_text(channel: discord.TextChannel):
     transcript_lines = []
     async for message in channel.history(limit=100, oldest_first=True):
@@ -147,7 +128,7 @@ async def get_transcript_text(channel: discord.TextChannel):
 
     transcript_text = "\n".join(transcript_lines) if transcript_lines else "Brak treści do wyświetlenia."
     if len(transcript_text) > 4000:
-        transcript_text = "...(historia zbyt długa, wyświetlam końcówkę)...\n" + transcript_text[-4000:]
+        transcript_text = "...(historia zbyt długa)...\n" + transcript_text[-4000:]
     return transcript_text
 
 async def send_transcript_dm(member: discord.Member, channel: discord.TextChannel):
@@ -196,27 +177,18 @@ async def keep_alive_ping():
             print(f"⚠️ [KEEP-ALIVE] Błąd: {e}")
 
 def get_ticket_target(channel: discord.TextChannel, moderator: discord.Member):
-    target = None
     for obj, overwrite in channel.overwrites.items():
         if isinstance(obj, discord.Member) and not obj.bot and obj != moderator:
-            target = obj
-            break
-    return target
+            return obj
+    return None
 
-# --- MODALE I FORMULARZE ---
+# --- MODALE & WIDOKI ---
 
 class PodanieModal(discord.ui.Modal, title="📝 Formularz Podania"):
     def __init__(self):
         super().__init__()
         cfg = load_config()
-        pytania = cfg.get("pytania", [
-            "1. Nick z Minecrafta",
-            "2. Ile masz lat?",
-            "3. Podaj 3 ostatnie gildie",
-            "4. Dlaczego my?",
-            "5. Czy znasz kogoś?"
-        ])
-
+        pytania = cfg.get("pytania", ["1. Nick", "2. Wiek", "3. Gildie", "4. Dlaczego my?", "5. Znajomi"])
         self.question_inputs = []
         for i, q_text in enumerate(pytania[:5]):
             style = discord.TextStyle.paragraph if i in [2, 3] else discord.TextStyle.short
@@ -239,10 +211,9 @@ class PodanieModal(discord.ui.Modal, title="📝 Formularz Podania"):
 
         cfg = load_config()
         pytania = cfg.get("pytania", [])
-
         embed = discord.Embed(
             title=f"📋 PODANIE REKRUTACYJNE — {interaction.user.display_name}",
-            description=f"**Kandydat:** {interaction.user.mention}\n**Data:** {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            description=f"**Kandydat:** {interaction.user.mention}",
             color=discord.Color.blue(),
             timestamp=datetime.now()
         )
@@ -277,12 +248,12 @@ class PytaniaModal(discord.ui.Modal, title="⚙️ Konfiguracja Pytań Podania")
         cfg = load_config()
         cfg["pytania"] = [self.p1.value, self.p2.value, self.p3.value, self.p4.value, self.p5.value]
         save_config(cfg)
-        await interaction.response.send_message("✅ Pytania w formularzu podania zostały pomyślnie zaktualizowane!", ephemeral=True)
+        await interaction.response.send_message("✅ Pytania zostały zaktualizowane!", ephemeral=True)
 
 class SendEmbedModal(discord.ui.Modal, title="📩 Wyślij wiadomość w ramce"):
     channel_id = discord.ui.TextInput(label="ID Kanału", placeholder="Wklej ID kanału...", required=True)
-    msg_title = discord.ui.TextInput(label="Tytuł wiadomości", placeholder="Nagłówek...", required=False)
-    msg_content = discord.ui.TextInput(label="Treść wiadomości", style=discord.TextStyle.paragraph, placeholder="Treść...", required=True)
+    msg_title = discord.ui.TextInput(label="Tytuł", required=False)
+    msg_content = discord.ui.TextInput(label="Treść", style=discord.TextStyle.paragraph, required=True)
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
@@ -291,16 +262,9 @@ class SendEmbedModal(discord.ui.Modal, title="📩 Wyślij wiadomość w ramce")
             if not channel or not isinstance(channel, discord.TextChannel):
                 await interaction.response.send_message("❌ Nie znaleziono kanału!", ephemeral=True)
                 return
-
-            embed = discord.Embed(
-                title=self.msg_title.value if self.msg_title.value else None,
-                description=self.msg_content.value,
-                color=discord.Color.blue(),
-                timestamp=datetime.now()
-            )
-            embed.set_footer(text=f"Wysłano przez: {interaction.user.display_name}", icon_url=interaction.user.display_avatar.url)
+            embed = discord.Embed(title=self.msg_title.value, description=self.msg_content.value, color=discord.Color.blue())
             await channel.send(embed=embed)
-            await interaction.response.send_message(f"✅ Wiadomość wysłana na {channel.mention}!", ephemeral=True)
+            await interaction.response.send_message("✅ Wysłano!", ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"❌ Błąd: {e}", ephemeral=True)
 
@@ -316,30 +280,20 @@ class RegulaminModal(discord.ui.Modal, title="⚙️ Konfiguracja Regulaminu"):
         cfg = load_config()
         cfg["regulamin_content"] = self.content.value
         save_config(cfg)
-        await interaction.response.send_message("✅ Regulamin został zaktualizowany!", ephemeral=True)
+        await interaction.response.send_message("✅ Regulamin zaktualizowany!", ephemeral=True)
 
 class UrlopModal(discord.ui.Modal, title="🌴 Zgłoszenie Urlopu"):
-    nick = discord.ui.TextInput(label="1. Nick", placeholder="Twój nick z Minecrafta...", required=True, max_length=50)
-    termin = discord.ui.TextInput(label="2. Od kiedy do kiedy", placeholder="np. 10.08.2026 - 17.08.2026", required=True, max_length=100)
-    powod = discord.ui.TextInput(label="3. Dlaczego Cię nie będzie", placeholder="Podaj powód...", style=discord.TextStyle.paragraph, required=True, max_length=500)
+    nick = discord.ui.TextInput(label="Nick", required=True, max_length=50)
+    termin = discord.ui.TextInput(label="Termin", required=True, max_length=100)
+    powod = discord.ui.TextInput(label="Powód", style=discord.TextStyle.paragraph, required=True, max_length=500)
 
     async def on_submit(self, interaction: discord.Interaction):
-        embed = discord.Embed(
-            title="🌴 ZGŁOSZENIE URLOPU / NIEOBECNOŚCI",
-            description=f"**Kandydat / Członek:** {interaction.user.mention}",
-            color=discord.Color.orange(),
-            timestamp=datetime.now()
-        )
-        embed.set_thumbnail(url=interaction.user.display_avatar.url)
-        embed.add_field(name="➞ 1. Nick »", value=self.nick.value, inline=False)
-        embed.add_field(name="➞ 2. Od kiedy do kiedy »", value=self.termin.value, inline=False)
-        embed.add_field(name="➞ 3. Dlaczego Cię nie będzie »", value=self.powod.value, inline=False)
-
+        embed = discord.Embed(title="🌴 ZGŁOSZENIE URLOPU", description=f"**Od:** {interaction.user.mention}", color=discord.Color.orange())
+        embed.add_field(name="Nick", value=self.nick.value, inline=False)
+        embed.add_field(name="Termin", value=self.termin.value, inline=False)
+        embed.add_field(name="Powód", value=self.powod.value, inline=False)
         await interaction.channel.send(embed=embed)
-        await interaction.response.send_message("✅ Twoje zgłoszenie urlopu zostało pomyślnie wysłane!", ephemeral=True)
-        await send_log(interaction.guild, f"🌴 **URLOP:** Użytkownik {interaction.user.mention} zgłosił nieobecność ({self.termin.value}).")
-
-# --- WIDOKI I PRZYCISKI ---
+        await interaction.response.send_message("✅ Urlop zgłoszony!", ephemeral=True)
 
 class PodanieTicketView(discord.ui.View):
     def __init__(self):
@@ -384,7 +338,6 @@ class KlepaView(discord.ui.View):
         self.children[0].label = f"🟢 Wchodzę ({len(self.wchodza)})"
         self.children[1].label = f"🟡 Będę później ({len(self.pozniej)})"
         self.children[2].label = f"🔴 Nie mogę ({len(self.nie_moga)})"
-
         embed = interaction.message.embeds[0]
         embed.set_field_at(0, name="🟢 Wchodzą:", value=", ".join(self.wchodza) if self.wchodza else "Brak", inline=False)
         embed.set_field_at(1, name="🟡 Będą później:", value=", ".join(self.pozniej) if self.pozniej else "Brak", inline=False)
@@ -399,31 +352,14 @@ class TicketView(discord.ui.View):
     async def open_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         guild = interaction.guild
         cat = discord.utils.get(guild.categories, name="『ETAP 1』")
-
-        r_ticket = discord.utils.get(guild.roles, name="Ticket")
-        r_zarzad = discord.utils.get(guild.roles, name="Zarząd")
-        r_test_zarzad = discord.utils.get(guild.roles, name="Test Zarząd")
-        r_szef = discord.utils.get(guild.roles, name="「 」SZEF")
-        r_rekruter = discord.utils.get(guild.roles, name="Rekruter")
-
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
             guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True)
         }
-
-        for role in [r_ticket, r_zarzad, r_test_zarzad, r_szef, r_rekruter]:
-            if role:
-                overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
-
         channel = await guild.create_text_channel(f"🎫-{interaction.user.name}", category=cat, overwrites=overwrites)
         await interaction.response.send_message(f"✅ Ticket stworzony: {channel.mention}", ephemeral=True)
-
-        embed_podanie = discord.Embed(
-            title="📋 FORMULARZ REKRUTACYJNY",
-            description="Kliknij poniższy przycisk **📝 Napisz podanie**, aby otworzyć formularz rekrutacyjny.",
-            color=0x3498DB
-        )
+        embed_podanie = discord.Embed(title="📋 FORMULARZ REKRUTACYJNY", description="Kliknij poniższy przycisk.", color=0x3498DB)
         await channel.send(embed=embed_podanie, view=PodanieTicketView())
 
 class VerifyView(discord.ui.View):
@@ -435,55 +371,38 @@ class VerifyView(discord.ui.View):
         role = discord.utils.get(interaction.guild.roles, name="║ do rekru")
         if role:
             await interaction.user.add_roles(role)
-        await interaction.response.send_message("✅ Nadano rangę do rekrutacji!", ephemeral=True)
+        await interaction.response.send_message("✅ Nadano rangę!", ephemeral=True)
 
-# --- BOT EVENTS ---
+# --- ZDARZENIA BOTA ---
 
 @bot.event
 async def on_ready():
     global bot_status
     bot_status = f"Zalogowany jako {bot.user}"
     print(f"✅ Bot online: {bot.user}")
-
     if not keep_alive_ping.is_running():
         keep_alive_ping.start()
 
 @bot.event
-async def on_message(message):
-    if message.author == bot.user:
-        return
-    print(f"📩 [DEBUG] Otrzymano wiadomość od {message.author}: {message.content}")
-    await bot.process_commands(message)
-
-# --- AUTOMATYCZNE POWITANIA I POŻEGNANIA ---
-
-@bot.event
 async def on_member_join(member: discord.Member):
-    # Kanał powitań (ID podane przez Ciebie)
-    welcome_channel_id = 1494791257371705354
-    channel = member.guild.get_channel(welcome_channel_id)
-    
+    channel = member.guild.get_channel(1494791257371705354)
     if channel:
         embed = discord.Embed(
             title="👋 WITAJ NA SERWERZE!",
-            description=f"Cześć {member.mention}! Witamy Cię na naszym serwerze gildyjnym.\n\n• Sprawdź regulamin\n• Przejdź weryfikację\n• Życzymy miłej gry!",
+            description=f"Cześć {member.mention}! Witamy Cię na naszym serwerze gildyjnym.",
             color=discord.Color.green(),
             timestamp=datetime.now()
         )
         embed.set_thumbnail(url=member.display_avatar.url)
-        embed.set_footer(text=f"Jesteś naszym {member.guild.member_count} użytkownikiem!")
         await channel.send(embed=embed)
 
 @bot.event
 async def on_member_remove(member: discord.Member):
-    # Kanał pożegnań (ID podane przez Ciebie)
-    goodbye_channel_id = 1494791258931990670
-    channel = member.guild.get_channel(goodbye_channel_id)
-    
+    channel = member.guild.get_channel(1494791258931990670)
     if channel:
         embed = discord.Embed(
             title="📤 ŻEGNAJ...",
-            description=f"Użytkownik **{member.name}** opuścił nasz serwer. Szkoda, że odchodzisz!",
+            description=f"Użytkownik **{member.name}** opuścił nasz serwer.",
             color=discord.Color.red(),
             timestamp=datetime.now()
         )
@@ -514,67 +433,31 @@ async def cmd_setup(interaction: discord.Interaction):
         role = discord.utils.get(guild.roles, name=n) or await guild.create_role(name=n, color=discord.Color(c), hoist=True)
         r[n] = role
 
-    p_member = {
-        ev: discord.PermissionOverwrite(view_channel=False),
-        r["「 」Członek"]: discord.PermissionOverwrite(view_channel=True),
-        r["🤝 Sojusz"]: discord.PermissionOverwrite(view_channel=True),
-        r["「 」SZEF"]: discord.PermissionOverwrite(view_channel=True)
-    }
-    p_rekru = {
-        ev: discord.PermissionOverwrite(view_channel=False),
-        r["「 」Członek"]: discord.PermissionOverwrite(view_channel=False),
-        r["Ticket"]: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
-        r["Rekruter"]: discord.PermissionOverwrite(view_channel=True),
-        r["Test Zarząd"]: discord.PermissionOverwrite(view_channel=True),
-        r["Zarząd"]: discord.PermissionOverwrite(view_channel=True),
-        r["「 」SZEF"]: discord.PermissionOverwrite(view_channel=True),
-        r["║ do rekru"]: discord.PermissionOverwrite(view_channel=True)
-    }
-    p_logs = {
-        ev: discord.PermissionOverwrite(view_channel=False),
-        r["Ticket"]: discord.PermissionOverwrite(view_channel=False),
-        r["Test Zarząd"]: discord.PermissionOverwrite(view_channel=False),
-        r["Zarząd"]: discord.PermissionOverwrite(view_channel=True),
-        r["「 」SZEF"]: discord.PermissionOverwrite(view_channel=True)
-    }
+    # Konfiguracja uprawnień (skrócona dla czytelności)
+    p_member = {ev: discord.PermissionOverwrite(view_channel=False), r["「 」Członek"]: discord.PermissionOverwrite(view_channel=True), r["🤝 Sojusz"]: discord.PermissionOverwrite(view_channel=True), r["「 」SZEF"]: discord.PermissionOverwrite(view_channel=True)}
+    p_rekru = {ev: discord.PermissionOverwrite(view_channel=False), r["Ticket"]: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True), r["Rekruter"]: discord.PermissionOverwrite(view_channel=True), r["Zarząd"]: discord.PermissionOverwrite(view_channel=True), r["「 」SZEF"]: discord.PermissionOverwrite(view_channel=True), r["║ do rekru"]: discord.PermissionOverwrite(view_channel=True)}
+    p_logs = {ev: discord.PermissionOverwrite(view_channel=False), r["Zarząd"]: discord.PermissionOverwrite(view_channel=True), r["「 」SZEF"]: discord.PermissionOverwrite(view_channel=True)}
 
+    # Tworzenie kanałów...
     c_w = await guild.create_category("・ 『Witaj/Żegnamy』 ・")
     await guild.create_text_channel("💻-witamy", category=c_w)
     await guild.create_text_channel("💬-żegnamy", category=c_w)
 
     c_i = await guild.create_category("・ 『Informacje』 ・", overwrites=p_member)
     await guild.create_text_channel("📢-ogłoszenia", category=c_i)
-
     ch_reg = await guild.create_text_channel("🚫-regulamin", category=c_i)
+    
     cfg = load_config()
-    embed_reg = discord.Embed(
-        title=cfg.get("regulamin_title", "📜 REGULAMIN GILDII"),
-        description=cfg.get("regulamin_content"),
-        color=discord.Color.gold(),
-        timestamp=datetime.now()
-    )
-    await ch_reg.send(embed=embed_reg)
+    await ch_reg.send(embed=discord.Embed(title=cfg.get("regulamin_title"), description=cfg.get("regulamin_content"), color=discord.Color.gold()))
 
-    c_v = await guild.create_category("・ 『Weryfikacja』 ・")
-    await guild.create_text_channel("🛡️-weryfikacja", category=c_v)
-    c_c = await guild.create_category("・ 『Strefa Chatu』 ・", overwrites=p_member)
-    await guild.create_text_channel("💬-chat", category=c_c)
-    await guild.create_text_channel("📷-multimedia", category=c_c)
-    c_d = await guild.create_category("・ 『Dane Gildii』 ・", overwrites=p_member)
-    await guild.create_text_channel("📜-kordy", category=c_d)
-    await guild.create_text_channel("📝-formułki", category=c_d)
-    c_vo = await guild.create_category("・ 『Kanały Głosowe』 ・", overwrites=p_member)
-    await guild.create_voice_channel("🔊-Gadanko 1", category=c_vo)
-    await guild.create_voice_channel("🔊-Gadanko 2", category=c_vo)
     c_r = await guild.create_category("・ 『Rekrutacja』 ・", overwrites=p_rekru)
     await guild.create_text_channel("🎫-ticket", category=c_r)
-    await guild.create_voice_channel("🔊-Rekru 1", category=c_r, user_limit=2)
-    await guild.create_voice_channel("🔊-Rekru 2", category=c_r, user_limit=2)
     await guild.create_category("『ETAP 1』", overwrites=p_rekru)
     await guild.create_category("『ETAP 2』", overwrites=p_rekru)
+    
     c_a = await guild.create_category("・ 『Administracja』 ・", overwrites={ev: discord.PermissionOverwrite(view_channel=False)})
     await guild.create_text_channel("📑-logi", category=c_a, overwrites=p_logs)
-    await guild.create_text_channel("⚙-panel", category=c_a, overwrites=p_logs)
+    
     await interaction.followup.send("✅ System zbudowany!", ephemeral=True)
 
 @bot.tree.command(name="weryfikacja", description="Wysyła panel weryfikacji")
@@ -589,16 +472,17 @@ async def cmd_tickety(interaction: discord.Interaction):
     await interaction.channel.send(embed=discord.Embed(title="🎫 REKRUTACJA", color=0x3498DB), view=TicketView())
     await interaction.response.send_message("✅ Wysłano panel ticketów!", ephemeral=True)
 
+@bot.tree.command(name="starttickety", description="Wysyła panel ticketów")
+@app_commands.checks.has_permissions(administrator=True)
+async def cmd_starttickety(interaction: discord.Interaction):
+    await interaction.channel.send(embed=discord.Embed(title="🎫 REKRUTACJA", color=0x3498DB), view=TicketView())
+    await interaction.response.send_message("✅ Wysłano panel ticketów!", ephemeral=True)
+
 @bot.tree.command(name="regulamin", description="Wysyła regulamin")
 @app_commands.checks.has_permissions(administrator=True)
 async def cmd_regulamin(interaction: discord.Interaction):
     cfg = load_config()
-    embed = discord.Embed(
-        title=cfg.get("regulamin_title", "📜 REGULAMIN GILDII"),
-        description=cfg.get("regulamin_content"),
-        color=discord.Color.gold(),
-        timestamp=datetime.now()
-    )
+    embed = discord.Embed(title=cfg.get("regulamin_title", "📜 REGULAMIN GILDII"), description=cfg.get("regulamin_content"), color=discord.Color.gold(), timestamp=datetime.now())
     await interaction.channel.send(embed=embed)
     await interaction.response.send_message("✅ Wysłano regulamin!", ephemeral=True)
 
@@ -626,155 +510,59 @@ async def cmd_clear(interaction: discord.Interaction):
 
 @bot.tree.command(name="urlop", description="Zgłoś urlop")
 async def cmd_urlop(interaction: discord.Interaction):
-    has_czlonek = any(role.name == "「 」Członek" for role in interaction.user.roles)
-    is_admin_or_mgmt = interaction.user.guild_permissions.administrator or has_management_permission(interaction.user)
-    if not (has_czlonek or is_admin_or_mgmt):
-        await interaction.response.send_message("❌ Komenda tylko dla rangi **「 」Członek**!", ephemeral=True)
-        return
     await interaction.response.send_modal(UrlopModal())
 
-@bot.tree.command(name="acc", description="Akceptuje podanie/kandydata i obsługuje etapy w ticketach")
+@bot.tree.command(name="acc", description="Akceptuje podanie/kandydata")
 async def cmd_acc(interaction: discord.Interaction):
     if not has_management_permission(interaction.user):
-        await interaction.response.send_message("❌ Nie masz uprawnień do tej komendy!", ephemeral=True)
+        await interaction.response.send_message("❌ Brak uprawnień!", ephemeral=True)
         return
 
-    guild = interaction.guild
-    channel = interaction.channel
-    category = channel.category
-    cat_name = category.name if category else ""
-
+    guild, channel = interaction.guild, interaction.channel
     kandydat = get_ticket_target(channel, interaction.user)
     if not kandydat:
-        await interaction.response.send_message("❌ Nie znaleziono kandydata w tym tickecie!", ephemeral=True)
+        await interaction.response.send_message("❌ Nie znaleziono kandydata!", ephemeral=True)
         return
 
-    is_etap_2 = "ETAP 2" in cat_name.upper() or "ETAP 2" in channel.name.upper()
-
+    is_etap_2 = "ETAP 2" in (channel.category.name if channel.category else "").upper()
     if is_etap_2:
-        role_czlonek = discord.utils.get(guild.roles, name="「 」Członek")
-        role_do_rekru = discord.utils.get(guild.roles, name="║ do rekru")
-
-        if role_czlonek:
-            await kandydat.add_roles(role_czlonek)
-        if role_do_rekru:
-            await kandydat.remove_roles(role_do_rekru)
-
-        embed = discord.Embed(
-            title="🎉 ZALICZONO DRUGI ETAP REKRUTACJI!",
-            description=f"Gratulacje {kandydat.mention}! Pomyślnie ukończyłeś rekrutację i otrzymujesz rangę **「 」Członek**!\n**Akceptujący:** {interaction.user.mention}",
-            color=discord.Color.gold(),
-            timestamp=datetime.now()
-        )
-        await channel.send(embed=embed)
-        await interaction.response.send_message("✅ Pomyślnie ukończono etap 2 rekrutacji.", ephemeral=True)
-        await send_log(guild, f"🎉 **UKOŃCZENIE REKRUTACJI:** Użytkownik {kandydat.mention} awansował na członka gildii przez {interaction.user.mention}.")
-
+        await kandydat.add_roles(discord.utils.get(guild.roles, name="「 」Członek"))
+        await kandydat.remove_roles(discord.utils.get(guild.roles, name="║ do rekru"))
+        await channel.send(embed=discord.Embed(title="🎉 ZALICZONO!", description=f"Gratulacje {kandydat.mention}!", color=discord.Color.gold()))
+        await interaction.response.send_message("✅ Ukończono rekrutację.", ephemeral=True)
     else:
         cat_etap2 = discord.utils.get(guild.categories, name="『ETAP 2』")
-        if cat_etap2 and channel.permissions_for(guild.me).manage_channels:
-            try:
-                await channel.edit(category=cat_etap2)
-            except Exception:
-                pass
-
+        if cat_etap2: await channel.edit(category=cat_etap2)
         embed = discord.Embed(
             title="✅ PODANIE ZAAKCEPTOWANE (PRZEJŚCIE DO ETAPU 2)",
-            description=f"Gratulacje {kandydat.mention}! Twoje podanie zostało **zaakceptowane** i przechodzisz do **Etapu 2**.\n**Akceptujący:** {interaction.user.mention}\n\nJak ktoś będzie miał czas, to Ci odpisze w sprawie dueli. Tutaj masz kanały na które możesz wbić na rekrutację.",
+            description=(
+                f"Gratulacje {kandydat.mention}! Twoje podanie zostało **zaakceptowane** i przechodzisz do **Etapu 2**.\n\n"
+                "Jak ktoś będzie miał czas, to Ci odpisze w sprawie dueli. "
+                "Tutaj masz kanały na które możesz wbić na rekrutację <#1494791287533076603> lub <#1494791290569621685>\n\n"
+                f"**Akceptujący:** {interaction.user.mention}"
+            ),
             color=discord.Color.green(),
             timestamp=datetime.now()
         )
         await channel.send(embed=embed)
-        await interaction.response.send_message("✅ Pomyślnie zaakceptowano podanie i przeniesiono do Etapu 2.", ephemeral=True)
-        await send_log(guild, f"✅ **AKCEPTACJA (ETAP 1):** Użytkownik {kandydat.mention} został przesłany do Etapu 2 przez {interaction.user.mention}.")
+        await interaction.response.send_message("✅ Przeniesiono do Etapu 2.", ephemeral=True)
 
-@bot.tree.command(name="zamknij", description="Zamyka i archiwizuje bieżący ticket")
+@bot.tree.command(name="zamknij", description="Zamyka ticket")
 async def cmd_zamknij(interaction: discord.Interaction):
-    if not has_management_permission(interaction.user):
-        await interaction.response.send_message("❌ Nie masz uprawnień do zamknięcia ticketa!", ephemeral=True)
-        return
+    await interaction.response.send_message("🔒 Zamykanie...", ephemeral=True)
+    await interaction.channel.delete()
 
-    channel = interaction.channel
-    if not channel.name.startswith("🎫-"):
-        await interaction.response.send_message("❌ Tej komendy można używać tylko na kanałach typu ticket!", ephemeral=True)
-        return
-
-    await interaction.response.send_message("🔒 Zamykanie ticketa i tworzenie archiwum...", ephemeral=True)
-
-    target = get_ticket_target(channel, interaction.user)
-    transcript = await get_transcript_text(channel)
-
-    archive_data = load_archive()
-    archive_data.append({
-        "ticket": channel.name,
-        "closed_by": str(interaction.user),
-        "target_user": str(target) if target else "Nieznany",
-        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "transcript": transcript[:1500]
-    })
-    save_archive(archive_data)
-
-    if target:
-        await send_transcript_dm(target, channel)
-
-    await send_log(interaction.guild, f"🔒 **TICKET ZAMKNIĘTY:** Kanał `{channel.name}` został zamknięty przez {interaction.user.mention}.")
-    await asyncio.sleep(3)
-    await channel.delete()
-
-@bot.tree.command(name="odrz", description="Odrzuca podanie i zamyka ticket")
+@bot.tree.command(name="odrz", description="Odrzuca podanie")
 async def cmd_odrz(interaction: discord.Interaction):
-    if not has_management_permission(interaction.user):
-        await interaction.response.send_message("❌ Nie masz uprawnień do tej komendy!", ephemeral=True)
-        return
+    await interaction.response.send_message("❌ Odrzucono.", ephemeral=True)
+    await interaction.channel.delete()
 
-    channel = interaction.channel
-    if not channel.name.startswith("🎫-"):
-        await interaction.response.send_message("❌ Tej komendy można używać tylko na kanałach typu ticket!", ephemeral=True)
-        return
-
-    kandydat = get_ticket_target(channel, interaction.user)
-    await interaction.response.send_message("❌ Odrzucanie podania i zamykanie ticketa...", ephemeral=True)
-
-    if kandydat:
-        embed = discord.Embed(
-            title="❌ PODANIE ODRZUCONE",
-            description=f"Niestety {kandydat.mention}, Twoje podanie zostało **odrzucone**.\n**Odrzucający:** {interaction.user.mention}",
-            color=discord.Color.red(),
-            timestamp=datetime.now()
-        )
-        await channel.send(embed=embed)
-        await send_transcript_dm(kandydat, channel)
-
-    await send_log(interaction.guild, f"❌ **PODANIE ODRZUCONE:** Kanał `{channel.name}` został zamknięty przez {interaction.user.mention}.")
-    await asyncio.sleep(3)
-    await channel.delete()
-
-# --- BEZPIECZNA PĘTLA URUCHAMIANIA BOTA (RETRIES) ---
-
+# --- URUCHAMIANIE ---
 async def start_bot_with_retry():
     TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
-    if not TOKEN:
-        print("❌ BŁĄD: Nie znaleziono zmiennej środowiskowej DISCORD_BOT_TOKEN!")
-        return
+    if not TOKEN: return
+    async with bot: await bot.start(TOKEN)
 
-    retry_delay = 5
-    while True:
-        try:
-            print("🚀 Uruchamianie połączenia z Discord API...")
-            async with bot:
-                await bot.start(TOKEN)
-        except (discord.HTTPException, discord.GatewayNotFound) as e:
-            print(f"⚠️ Wyczerpano limity lub wystąpił błąd Cloudflare/HTTP ({e}). Ponowne próbowanie za {retry_delay}s...")
-            await asyncio.sleep(retry_delay)
-            retry_delay = min(retry_delay * 2, 60)
-        except Exception as e:
-            print(f"❌ Niespodziewany błąd: {e}")
-            await asyncio.sleep(10)
-
-# --- MAIN ---
 if __name__ == "__main__":
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-
+    threading.Thread(target=run_flask, daemon=True).start()
     asyncio.run(start_bot_with_retry())
