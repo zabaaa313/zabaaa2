@@ -933,150 +933,22 @@ async def cmd_klepa(interaction: discord.Interaction, opis: str):
     embed.add_field(name="🟢 Wchodzą:", value="Brak", inline=False)
     embed.add_field(name="🟡 Będą później:", value="Brak", inline=False)
     embed.add_field(name="🔴 Nie mogą:", value="Brak", inline=False)
-
     await interaction.channel.send(embed=embed, view=KlepaView())
     await interaction.response.send_message(
-        "✅ Ogłoszenie klepy wysłane!", ephemeral=True
+        "✅ Wysłano panel zapisów na klepę!", ephemeral=True
     )
 
 
-# --- ZAAWANSOWANA KOMENDA /AI Z WYKONYWANIEM AKCJI (TWORZENIE KANAŁÓW) ---
-@bot.tree.command(
-    name="ai",
-    description="Wydaj polecenie asystentowi AI (może też tworzyć kanały!)",
-)
-async def ai_command(interaction: discord.Interaction, prompt: str):
-    if not has_management_permission(interaction.user):
-        await interaction.response.send_message(
-            "❌ Nie masz uprawnień zarządu do używania asystenta AI!",
-            ephemeral=True,
-        )
-        return
-
-    await interaction.response.defer()
-
-    gemini_key = os.environ.get("GEMINI_API_KEY")
-    if not gemini_key:
-        await interaction.followup.send(
-            "❌ Brak klucza GEMINI_API_KEY w zmiennych środowiskowych Render!"
-        )
-        return
-
-    try:
-        genai.configure(api_key=gemini_key)
-
-        models_to_test = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
-
-        try:
-            for m in genai.list_models():
-                if "generateContent" in m.supported_generation_methods:
-                    name = m.name.replace("models/", "")
-                    if "2.5" not in name and name not in models_to_test:
-                        models_to_test.insert(0, name)
-        except Exception:
-            pass
-
-        response = None
-        success = False
-        used_model = ""
-
-        system_instruction = (
-            "Jesteś zaawansowanym asystentem administracyjnym serwera Discord. "
-            "Jeśli użytkownik poprosi Cię o stworzenie kanału tekstowego lub głosowego, "
-            "oprócz normalnej odpowiedzi tekstowej dopisz na samym końcu nową linię w dokładnie takim formacie: "
-            "[AKCJA: TEKSTOWY | nazwa-kanalu] lub [AKCJA: GLOSOWY | nazwa-kanalu]. "
-            "Jeśli użytkownik o nic takiego nie prosi, nie dopisuj tego znacznika."
-        )
-
-        for model_name in models_to_test:
-            try:
-                clean_name = model_name.replace("models/", "")
-                model = genai.GenerativeModel(clean_name)
-                response = model.generate_content(
-                    f"{system_instruction}\n\nUżytkownik napisał: {prompt}"
-                )
-                if response and response.text:
-                    used_model = clean_name
-                    success = True
-                    break
-            except Exception:
-                continue
-
-        if success and response and response.text:
-            full_text = response.text
-            akcja_info = ""
-
-            if "[AKCJA: TEKSTOWY |" in full_text:
-                try:
-                    channel_name = (
-                        full_text.split("[AKCJA: TEKSTOWY |")[1]
-                        .split("]")[0]
-                        .strip()
-                    )
-                    await interaction.guild.create_text_channel(channel_name)
-                    akcja_info = f"\n\n✨ *(Wykonano: Automatycznie utworzyłem kanał tekstowy **{channel_name}**)*"
-                    full_text = full_text.split("[AKCJA: TEKSTOWY |")[0].strip()
-                except Exception as e:
-                    akcja_info = f"\n\n⚠️ *(Błąd tworzenia kanału tekstowego: {e})*"
-
-            elif "[AKCJA: GLOSOWY |" in full_text:
-                try:
-                    channel_name = (
-                        full_text.split("[AKCJA: GLOSOWY |")[1]
-                        .split("]")[0]
-                        .strip()
-                    )
-                    await interaction.guild.create_voice_channel(channel_name)
-                    akcja_info = f"\n\n✨ *(Wykonano: Automatycznie utworzyłem kanał głosowy **{channel_name}**)*"
-                    full_text = full_text.split("[AKCJA: GLOSOWY |")[0].strip()
-                except Exception as e:
-                    akcja_info = f"\n\n⚠️ *(Błąd tworzenia kanału głosowego: {e})*"
-
-            embed = discord.Embed(
-                title="🤖 Asystent AI",
-                description=f"{full_text}{akcja_info}",
-                color=discord.Color.purple(),
-                timestamp=datetime.now(),
-            )
-            embed.set_footer(text=f"Model: {used_model}")
-            await interaction.followup.send(embed=embed)
-        else:
-            await interaction.followup.send(
-                "❌ Nie udało się uzyskać odpowiedzi od żądnego z dostępnych modeli AI."
-            )
-    except Exception as e:
-        await interaction.followup.send(
-            f"❌ Błąd podczas przetwarzania żądania AI: {e}"
-        )
-
-
-# --- BEZPIECZNE URUCHAMIANIE BOTA ---
+# --- URUCHOMIENIE BOTA I FLASKA ---
 if __name__ == "__main__":
-    # Uruchomienie serwera WWW w osobnym wątku dla hostingu Render
-    threading.Thread(target=run_flask, daemon=True).start()
+    # Uruchomienie serwera WWW w osobnym wątku, aby Render widział aktywny port
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
 
-    token = os.environ.get("DISCORD_TOKEN") or os.environ.get("TOKEN")
-    if not token:
-        raise ValueError(
-            "❌ Brak tokena bota! Upewnij się, że zmienna DISCORD_TOKEN lub TOKEN jest ustawiona w panelu Render."
-        )
-
-    while True:
-        try:
-            print("🚀 Próba połączenia z Discord API...")
-            bot.run(token)
-        except discord.errors.HTTPException as e:
-            if e.status == 429:
-                print(
-                    "⚠️ [429 Too Many Requests] Wykryto blokadę Cloudflare/Discord."
-                )
-                print(
-                    "⏳ Wstrzymuję próby połączenia na 5 minut, aby uniknąć wydłużenia bana..."
-                )
-                time.sleep(300)
-            else:
-                print(f"❌ Błąd HTTP Discorda ({e.status}): {e}")
-                time.sleep(60)
-        except Exception as e:
-            print(f"❌ Nieoczekiwany błąd podczas uruchamiania bota: {e}")
-            time.sleep(60)
+    # Uruchomienie bota Discord (pobiera token ze zmiennych środowiskowych Rendera)
+    TOKEN = os.environ.get("DISCORD_TOKEN")
+    if TOKEN:
+        bot.run(TOKEN)
+    else:
+        print("❌ BŁĄD: Brak zmiennej środowiskowej DISCORD_TOKEN na Renderze!")
