@@ -189,7 +189,6 @@ async def keep_alive_ping():
     url = os.environ.get("RENDER_EXTERNAL_URL")
     if url:
         try:
-            # Użycie dostosowanych nagłówków nagłówkowych HTTP przeciwko Cloudflare
             async with aiohttp.ClientSession(headers=CUSTOM_HEADERS) as session:
                 async with session.get(url) as response:
                     print(f"⏰ [KEEP-ALIVE] Ping wysłany do {url} | Status: {response.status}")
@@ -448,6 +447,48 @@ async def on_ready():
 
     if not keep_alive_ping.is_running():
         keep_alive_ping.start()
+
+@bot.event
+async def on_message(message):
+    if message.author == bot.user:
+        return
+    print(f"📩 [DEBUG] Otrzymano wiadomość od {message.author}: {message.content}")
+    await bot.process_commands(message)
+
+# --- AUTOMATYCZNE POWITANIA I POŻEGNANIA ---
+
+@bot.event
+async def on_member_join(member: discord.Member):
+    # Kanał powitań (ID podane przez Ciebie)
+    welcome_channel_id = 1494791257371705354
+    channel = member.guild.get_channel(welcome_channel_id)
+    
+    if channel:
+        embed = discord.Embed(
+            title="👋 WITAJ NA SERWERZE!",
+            description=f"Cześć {member.mention}! Witamy Cię na naszym serwerze gildyjnym.\n\n• Sprawdź regulamin\n• Przejdź weryfikację\n• Życzymy miłej gry!",
+            color=discord.Color.green(),
+            timestamp=datetime.now()
+        )
+        embed.set_thumbnail(url=member.display_avatar.url)
+        embed.set_footer(text=f"Jesteś naszym {member.guild.member_count} użytkownikiem!")
+        await channel.send(embed=embed)
+
+@bot.event
+async def on_member_remove(member: discord.Member):
+    # Kanał pożegnań (ID podane przez Ciebie)
+    goodbye_channel_id = 1494791258931990670
+    channel = member.guild.get_channel(goodbye_channel_id)
+    
+    if channel:
+        embed = discord.Embed(
+            title="📤 ŻEGNAJ...",
+            description=f"Użytkownik **{member.name}** opuścił nasz serwer. Szkoda, że odchodzisz!",
+            color=discord.Color.red(),
+            timestamp=datetime.now()
+        )
+        embed.set_thumbnail(url=member.display_avatar.url)
+        await channel.send(embed=embed)
 
 # --- KOMENDY SLASH ---
 
@@ -708,7 +749,7 @@ async def cmd_odrz(interaction: discord.Interaction):
     await asyncio.sleep(3)
     await channel.delete()
 
-# --- BEZPIECZNY PĘTLA URUCHAMIANIA BOTA (RETRIES) ---
+# --- BEZPIECZNA PĘTLA URUCHAMIANIA BOTA (RETRIES) ---
 
 async def start_bot_with_retry():
     TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
@@ -725,17 +766,15 @@ async def start_bot_with_retry():
         except (discord.HTTPException, discord.GatewayNotFound) as e:
             print(f"⚠️ Wyczerpano limity lub wystąpił błąd Cloudflare/HTTP ({e}). Ponowne próbowanie za {retry_delay}s...")
             await asyncio.sleep(retry_delay)
-            retry_delay = min(retry_delay * 2, 60) # Wydłużanie czasu oczekiwania przy kolejnych błędach
+            retry_delay = min(retry_delay * 2, 60)
         except Exception as e:
             print(f"❌ Niespodziewany błąd: {e}")
             await asyncio.sleep(10)
 
 # --- MAIN ---
 if __name__ == "__main__":
-    # Uruchomienie Flask w osobnym wątku
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
 
-    # Bezpieczne uruchomienie bota w pętli zdarzeń asyncio
     asyncio.run(start_bot_with_retry())
