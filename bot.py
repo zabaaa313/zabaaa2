@@ -18,7 +18,7 @@ if proxy_url:
     os.environ["HTTPS_PROXY"] = proxy_url
 
 CUSTOM_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 DiscordBot/1.0"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
 # --- SERWER WWW (FLASK) ---
@@ -170,7 +170,7 @@ async def keep_alive_ping():
     url = os.environ.get("RENDER_EXTERNAL_URL")
     if url:
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(headers=CUSTOM_HEADERS) as session:
                 async with session.get(url) as response:
                     if response.status == 200:
                         print(f"⏰ [KEEP-ALIVE] Ping udany do {url}")
@@ -561,8 +561,11 @@ async def cmd_odrz(interaction: discord.Interaction):
 # --- URUCHAMIANIE ---
 async def start_bot_with_retry():
     TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
-    if not TOKEN: return
-    async with bot: await bot.start(TOKEN)
+    if not TOKEN:
+        print("❌ Brak tokenu bota w zmiennych środowiskowych (DISCORD_BOT_TOKEN)!")
+        return
+    async with bot:
+        await bot.start(TOKEN)
 
 if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
