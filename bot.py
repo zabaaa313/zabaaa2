@@ -699,11 +699,15 @@ async def cmd_stareticekty(interaction: discord.Interaction):
 
 # --- URUCHOMIENIE BOTA I FLASKA ---
 if __name__ == "__main__":
-    t = threading.Thread(target=run_flask)
+    # Uruchamiamy serwer Flask w osobnym wątku
+    t = threading.Thread(target=run_flask, daemon=True)
     t.start()
     
     token = os.environ.get("DISCORD_BOT_TOKEN")
     if not token:
         print("❌ Brak tokenu bota w zmiennych środowiskowych (DISCORD_BOT_TOKEN)!")
     else:
-        bot.run(token)
+        try:
+            bot.run(token)
+        except Exception as e:
+            print(f"❌ Krytyczny błąd podczas uruchamiania bota: {e}")
