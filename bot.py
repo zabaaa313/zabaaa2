@@ -6,7 +6,7 @@ import os
 import threading
 import aiohttp
 import discord
-from discord import app_codes if False else app_commands
+from discord import app_commands
 from discord.ext import commands, tasks
 from flask import Flask
 
@@ -36,7 +36,6 @@ intents = discord.Intents.all()
 
 class MyBot(commands.Bot):
     def __init__(self):
-        # Przekazujemy proxy bezpośrednio do discord.py (jeśli jest ustawione)
         kwargs = {"command_prefix": "!", "intents": intents}
         if proxy_url:
             kwargs["proxy"] = proxy_url
@@ -158,8 +157,6 @@ async def keep_alive_ping():
     url = os.environ.get("RENDER_EXTERNAL_URL")
     if url:
         try:
-            # Dla sesji aiohttp też uwzględniamy proxy jeśli jest podane
-            connector = aiohttp.TCPConnector()
             async with aiohttp.ClientSession(headers=CUSTOM_HEADERS) as session:
                 async with session.get(url, proxy=proxy_url if proxy_url else None) as response:
                     if response.status == 200:
