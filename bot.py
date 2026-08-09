@@ -542,8 +542,8 @@ async def cmd_urlop(interaction: discord.Interaction):
         return
     await interaction.response.send_modal(UrlopModal())
 
-@bot.tree.command(name="acc", description="Akceptuje podanie/kandydata i obsługuje etapy")
-async def cmd_acc(interaction: discord.Interaction, member: discord.Member):
+@bot.tree.command(name="acc", description="Akceptuje podanie/kandydata i obsługuje etapy w ticketach")
+async def cmd_acc(interaction: discord.Interaction):
     if not has_management_permission(interaction.user):
         await interaction.response.send_message("❌ Nie masz uprawnień do tej komendy!", ephemeral=True)
         return
@@ -553,8 +553,10 @@ async def cmd_acc(interaction: discord.Interaction, member: discord.Member):
     category = channel.category
     cat_name = category.name if category else ""
     
-    target = get_ticket_target(channel, interaction.user)
-    kandydat = target if target else member
+    kandydat = get_ticket_target(channel, interaction.user)
+    if not kandydat:
+        await interaction.response.send_message("❌ Nie znaleziono kandydata w tym tickecie!", ephemeral=True)
+        return
     
     is_etap_2 = "ETAP 2" in cat_name.upper() or "ETAP 2" in channel.name.upper()
     
@@ -616,7 +618,6 @@ async def cmd_zamknij(interaction: discord.Interaction):
     target = get_ticket_target(channel, interaction.user)
     transcript = await get_transcript_text(channel)
     
-    # Zapis do archiwum JSON
     archive_data = load_archive()
     archive_data.append({
         "ticket": channel.name,
@@ -635,14 +636,16 @@ async def cmd_zamknij(interaction: discord.Interaction):
     await channel.delete()
 
 @bot.tree.command(name="odrz", description="Odrzuca podanie i zamyka ticket")
-async def cmd_odrz(interaction: discord.Interaction, member: discord.Member):
+async def cmd_odrz(interaction: discord.Interaction):
     if not has_management_permission(interaction.user):
         await interaction.response.send_message("❌ Nie masz uprawnień do tej komendy!", ephemeral=True)
         return
 
     channel = interaction.channel
-    target = get_ticket_target(channel, interaction.user)
-    kandydat = target if target else member
+    kandydat = get_ticket_target(channel, interaction.user)
+    if not kandydat:
+        await interaction.response.send_message("❌ Nie znaleziono kandydata w tym tickecie!", ephemeral=True)
+        return
 
     embed = discord.Embed(
         title="❌ PODANIE ODRZUCONE",
@@ -685,7 +688,7 @@ async def cmd_stareticekty(interaction: discord.Interaction):
         timestamp=datetime.now()
     )
     
-    for item in archive_data[-5:]:  # Pokazuje 5 ostatnich
+    for item in archive_data[-5:]:
         embed.add_field(
             name=f"🎫 {item.get('ticket', 'Brak')} ({item.get('date', '')})",
             value=f"• **Zamknięty przez:** {item.get('closed_by', 'N/A')}\n• **Gracz:** {item.get('target_user', 'N/A')}",
