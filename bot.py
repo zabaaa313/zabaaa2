@@ -664,6 +664,19 @@ async def on_ready():
 
     print(f"✅ Bot online: {bot.user}")
 
+    # Synchronizacja komend do serwera (guild sync), aby nowe komendy
+    # pojawiały się od razu, zamiast czekać na propagację komend globalnych.
+    if not getattr(bot, "_guild_commands_synced", False):
+        for guild in bot.guilds:
+            try:
+                guild_ref = discord.Object(id=guild.id)
+                bot.tree.copy_global_to(guild=guild_ref)
+                synced = await bot.tree.sync(guild=guild_ref)
+                print(f"⚡ Zsynchronizowano {len(synced)} komend na serwerze {guild.name} ({guild.id})")
+            except Exception as e:
+                print(f"⚠️ Błąd synchronizacji komend na serwerze {guild.id}: {e}")
+        bot._guild_commands_synced = True
+
     if not keep_alive_ping.is_running():
 
         keep_alive_ping.start()
@@ -824,9 +837,7 @@ async def cmd_setup(interaction: discord.Interaction):
 
     await interaction.followup.send("✅ System zbudowany!", ephemeral=True)
 
-@bot.tree.command(name="naprawtickety", description="Nadaje rekruterom dostęp do kategorii i istniejących ticketów")
-@app_commands.checks.has_permissions(administrator=True)
-async def cmd_naprawtickety(interaction: discord.Interaction):
+async def _naprawtickety_impl(interaction: discord.Interaction):
     guild = interaction.guild
     if guild is None:
         await interaction.response.send_message(
@@ -912,6 +923,20 @@ async def cmd_naprawtickety(interaction: discord.Interaction):
         f"✅ Naprawiono uprawnienia. Kategorie: {updated_categories}, kanały: {updated_channels}. Rola `Rekruter` ma dostęp do ticketów.",
         ephemeral=True
     )
+
+
+# Obie pisownie są dostępne, aby uniknąć problemu z literówką.
+@bot.tree.command(name="naprawtickety", description="Nadaje rekruterom dostęp do kategorii i istniejących ticketów")
+@app_commands.checks.has_permissions(administrator=True)
+async def cmd_naprawtickety(interaction: discord.Interaction):
+    await _naprawtickety_impl(interaction)
+
+
+@bot.tree.command(name="naprawticekty", description="Nadaje rekruterom dostęp do kategorii i istniejących ticketów")
+@app_commands.checks.has_permissions(administrator=True)
+async def cmd_naprawticekty(interaction: discord.Interaction):
+    await _naprawtickety_impl(interaction)
+
 
 @bot.tree.command(name="weryfikacja", description="Wysyła panel weryfikacji")
 
